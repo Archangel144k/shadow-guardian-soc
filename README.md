@@ -76,33 +76,42 @@ cd shadow-guardian-soc
 npm install
 ```
 
-3. **Start the development server:**
+3. **(Optional) Set up Supabase backend:**
+```bash
+# Copy environment template
+cp .env.local.example .env.local
+
+# Add your Supabase credentials to .env.local
+# See SUPABASE_INTEGRATION.md for detailed setup guide
+```
+
+4. **Start the development server:**
 ```bash
 npm run dev
 ```
 
-4. **Open your browser and navigate to:**
+5. **Open your browser and navigate to:**
 ```
 http://localhost:5173
 ```
-```bash
-git clone <repository-url>
-cd cronos
-```
 
-2. Install dependencies:
-```bash
-npm install
-```
+## 🔧 Backend Integration
 
-3. Start the development server:
-```bash
-npm run dev
-```
+Shadow Guardian supports two modes of operation:
 
-4. Open your browser and navigate to `http://localhost:5173`
+### Demo Mode (Default)
+- Uses simulated data and mock authentication
+- Perfect for testing and demonstrations
+- No backend setup required
+- Add `?demo=true` to URL to force demo mode
 
-### Demo Credentials
+### Live Mode (Supabase Backend)
+- Real-time threat monitoring and data persistence
+- User authentication with role-based access control
+- Training progress tracking and system metrics
+- Follow the [Supabase Integration Guide](./SUPABASE_INTEGRATION.md) for setup
+
+## 🎮 Demo Credentials
 
 | Username | Password | Clearance Level | Role |
 |----------|----------|----------------|------|
