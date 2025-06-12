@@ -3,19 +3,27 @@ import { createClient } from '@supabase/supabase-js'
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing Supabase environment variables')
-}
+// Check if we have valid Supabase configuration
+const hasValidConfig = !!(
+  supabaseUrl && 
+  supabaseAnonKey && 
+  supabaseUrl.includes('supabase.co') &&
+  supabaseAnonKey.length > 100 &&
+  !supabaseUrl.includes('your-project-ref')
+)
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-  },
-  realtime: {
-    enabled: true,
-  }
-})
+// Create Supabase client only if we have valid configuration
+export const supabase = hasValidConfig 
+  ? createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+      }
+    })
+  : null
+
+// Export configuration status
+export const isSupabaseConfigured = hasValidConfig
 
 // Database Types
 export interface UserProfile {
@@ -50,7 +58,7 @@ export interface SecurityTool {
   status: 'active' | 'inactive' | 'maintenance' | 'scanning' | 'standby'
   performance: number
   icon: string
-  metrics: Record<string, any>
+  metrics: Record<string, unknown>
   created_at: string
   updated_at: string
 }
@@ -62,7 +70,7 @@ export interface TrainingModule {
   difficulty: 'Beginner' | 'Intermediate' | 'Advanced' | 'Expert'
   duration: string
   type: string
-  content?: Record<string, any>
+  content?: Record<string, unknown>
   created_at: string
   updated_at: string
 }
@@ -82,5 +90,5 @@ export interface SystemMetrics {
   metric_type: string
   value: number
   timestamp: string
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
 }

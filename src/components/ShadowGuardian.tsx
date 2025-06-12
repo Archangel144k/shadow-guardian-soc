@@ -33,43 +33,55 @@ import {
   CartesianGrid
 } from 'recharts';
 
-// Supabase imports
-import { useAuth } from '../hooks/useAuth';
-import { useThreats, useSecurityTools, useTraining, useMetrics } from '../hooks/useSOCData';
-import SupabaseSetup from './SupabaseSetup';
-
 // Shadow Guardian SOC Platform
 const ShadowGuardian = () => {
-  // Supabase Authentication
-  const { user, userProfile, loading: authLoading, signInWithEmail, signOut } = useAuth();
+  // Check if Supabase is properly configured
+  const hasSupabaseConfig = !!(
+    import.meta.env.VITE_SUPABASE_URL && 
+    import.meta.env.VITE_SUPABASE_ANON_KEY &&
+    import.meta.env.VITE_SUPABASE_URL.includes('supabase.co') &&
+    import.meta.env.VITE_SUPABASE_ANON_KEY.length > 100 &&
+    !import.meta.env.VITE_SUPABASE_URL.includes('your-project-ref')
+  );
   
-  // SOC Data Hooks
-  const { threats, loading: threatsLoading, addThreat, updateThreatStatus } = useThreats();
-  const { tools, loading: toolsLoading, updateToolStatus } = useSecurityTools();
-  const { modules, userProgress, updateProgress } = useTraining(user?.id);
-  const { metrics, addMetric } = useMetrics();
-
-  // Demo mode and legacy state management
-  const [demoMode] = useState(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    return urlParams.get('demo') === 'true' || !import.meta.env.VITE_SUPABASE_URL;
-  });
-
-  // Legacy Authentication State (for demo mode fallback)
+  // Determine if we should use demo mode
+  const demoMode = !hasSupabaseConfig || new URLSearchParams(window.location.search).get('demo') === 'true';
+  
+  // Legacy Authentication State (demo mode)
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authStep, setAuthStep] = useState('login');
   const [loginData, setLoginData] = useState({ username: '', password: '' });
   const [mfaCode, setMfaCode] = useState(['', '', '', '', '', '']);
   const [authAttempts, setAuthAttempts] = useState(0);
   const [lockoutTime, setLockoutTime] = useState(0);
-  const [currentUser, setCurrentUser] = useState<any>(null);
-  const [useDemoMode, setUseDemoMode] = useState(false);
+  const [currentUser, setCurrentUser] = useState<{
+    username: string;
+    role: string;
+    department: string;
+    clearance: string;
+    name?: string;
+    mfaSecret?: string;
+  } | null>(null);
   
   // UI State
   const [activeTab, setActiveTab] = useState('dashboard');
   const [systemStatus] = useState('stealth');
-  const [matrixRain, setMatrixRain] = useState<any[]>([]);
-  const [notifications, setNotifications] = useState<any[]>([]);
+  const [matrixRain, setMatrixRain] = useState<{
+    id: number;
+    char: string;
+    x: number;
+    y: number;
+    speed: number;
+    opacity?: number;
+  }[]>([]);
+  const [notifications, setNotifications] = useState<{
+    id: number;
+    type: string;
+    message: string;
+    timestamp?: string;
+    time?: string;
+    read?: boolean;
+  }[]>([]);
   const [alertCount, setAlertCount] = useState(0);
   const [soundEnabled, setSoundEnabled] = useState(false);
   const scanlineEffect = true;
@@ -323,23 +335,8 @@ const ShadowGuardian = () => {
   const handleLogin = async () => {
     if (lockoutTime > 0) return;
 
-    // Use Supabase authentication if not in demo mode
-    if (!demoMode && signInWithEmail) {
-      try {
-        await signInWithEmail(loginData.username, loginData.password);
-        setAuthAttempts(0);
-      } catch (error) {
-        console.error('Login error:', error);
-        setAuthAttempts(prev => prev + 1);
-        if (authAttempts >= 2) {
-          setLockoutTime(30);
-        }
-      }
-      return;
-    }
-
-    // Demo mode fallback
-    const user = (users as any)[loginData.username.toLowerCase()];
+    // Demo mode authentication
+    const user = users[loginData.username.toLowerCase() as keyof typeof users];
     if (user && user.password === loginData.password) {
       setCurrentUser({ username: loginData.username, ...user });
       setAuthStep('mfa');
@@ -367,33 +364,14 @@ const ShadowGuardian = () => {
 
   const verifyMFA = () => {
     const enteredCode = mfaCode.join('');
-    
-    // In demo mode, use legacy verification
-    if (demoMode) {
-      if (enteredCode === currentUser.mfaSecret) {
-        setIsAuthenticated(true);
-      } else {
-        setMfaCode(['', '', '', '', '', '']);
-      }
-      return;
-    }
-
-    // For Supabase mode, MFA is handled differently or can be skipped
-    // In a real implementation, you'd integrate with Supabase MFA
-    if (enteredCode.length === 6) {
+    if (enteredCode === currentUser?.mfaSecret) {
       setIsAuthenticated(true);
     } else {
       setMfaCode(['', '', '', '', '', '']);
     }
   };
 
-  const logout = async () => {
-    // Use Supabase logout if not in demo mode
-    if (!demoMode && signOut) {
-      await signOut();
-    }
-    
-    // Reset demo mode state
+  const logout = () => {
     setIsAuthenticated(false);
     setAuthStep('login');
     setCurrentUser(null);
@@ -402,25 +380,8 @@ const ShadowGuardian = () => {
     setAuthAttempts(0);
   };
 
-  // Check authentication status
-  const isUserAuthenticated = demoMode ? isAuthenticated : !!user;
-  const currentUserData = demoMode ? currentUser : userProfile;
-
-  // Show loading screen while checking authentication
-  if (authLoading) {
-    return (
-      <div className="min-h-screen bg-black text-white relative overflow-hidden flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin w-16 h-16 border-4 border-red-500 border-t-transparent rounded-full mx-auto mb-4"></div>
-          <div className="text-red-400 font-mono text-xl">SHADOW GUARDIAN INITIALIZING...</div>
-          <div className="text-gray-400 font-mono text-sm mt-2">Authenticating secure connection...</div>
-        </div>
-      </div>
-    );
-  }
-
   // Authentication Screen
-  if (!isUserAuthenticated) {
+  if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-black text-white relative overflow-hidden">
         {/* Matrix Rain Background */}
@@ -661,10 +622,10 @@ const ShadowGuardian = () => {
                 {/* User Info */}
                 <div className="text-right bg-black/50 px-3 py-2 rounded-lg border border-gray-700/50">
                   <div className="text-sm font-mono">
-                    <span className="text-red-400">{currentUserData?.full_name || currentUserData?.name}</span>
+                    <span className="text-red-400">{currentUser?.name}</span>
                   </div>
                   <div className="text-xs text-gray-400">
-                    <span className="text-red-400">{currentUserData?.clearance_level || currentUserData?.clearance}</span> | {currentUserData?.role}
+                    <span className="text-red-400">{currentUser?.clearance}</span> | {currentUser?.role}
                   </div>
                 </div>
                 
@@ -690,7 +651,8 @@ const ShadowGuardian = () => {
                 { id: 'tools', label: 'Security Tools', icon: Settings },
                 { id: 'hunting', label: 'Threat Hunting', icon: Search },
                 { id: 'learning', label: 'Training Academy', icon: Book },
-                { id: 'hardening', label: 'Security Hardening', icon: ShieldCheck }
+                { id: 'hardening', label: 'Security Hardening', icon: ShieldCheck },
+                { id: 'backend', label: 'Backend Config', icon: Database }
               ].map(({ id, label, icon: Icon }) => (
                 <button
                   key={id}
@@ -770,7 +732,7 @@ const ShadowGuardian = () => {
                     <Shield className="w-8 h-8 text-green-400" />
                     <div>
                       <div className="text-2xl font-bold text-green-400 font-mono">
-                        {demoMode ? securityTools.filter(t => t.status === 'active').length : tools?.filter(t => t.status === 'active').length || 0}
+                        {securityTools.filter((t: SecurityTool) => t.status === 'active').length}
                       </div>
                       <div className="text-sm text-gray-300 font-mono">TOOLS ACTIVE</div>
                     </div>
@@ -782,7 +744,7 @@ const ShadowGuardian = () => {
                     <Eye className="w-8 h-8 text-blue-400" />
                     <div>
                       <div className="text-2xl font-bold text-blue-400 font-mono">
-                        {demoMode ? recentThreats.length : threats?.length || 0}
+                        {recentThreats.length}
                       </div>
                       <div className="text-sm text-gray-300 font-mono">THREATS DETECTED</div>
                     </div>
@@ -794,7 +756,7 @@ const ShadowGuardian = () => {
                     <AlertTriangle className="w-8 h-8 text-orange-400" />
                     <div>
                       <div className="text-2xl font-bold text-orange-400 font-mono">
-                        {demoMode ? alertCount : threats?.filter(t => t.status === 'Active').length || 0}
+                        {alertCount}
                       </div>
                       <div className="text-sm text-gray-300 font-mono">ACTIVE ALERTS</div>
                     </div>
@@ -814,8 +776,40 @@ const ShadowGuardian = () => {
                 </div>
               </div>
 
-              {/* Supabase Backend Status */}
-              <SupabaseSetup />
+              {/* Supabase Connection Status */}
+              <div className={`bg-black/60 backdrop-blur-sm rounded-xl p-6 border shadow-lg ${
+                hasSupabaseConfig 
+                  ? 'border-green-500/30 shadow-green-500/10' 
+                  : 'border-yellow-500/30 shadow-yellow-500/10'
+              }`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <Database className={`w-8 h-8 ${hasSupabaseConfig ? 'text-green-400' : 'text-yellow-400'}`} />
+                    <div>
+                      <div className={`text-lg font-bold font-mono ${hasSupabaseConfig ? 'text-green-400' : 'text-yellow-400'}`}>
+                        BACKEND STATUS
+                      </div>
+                      <div className="text-sm text-gray-300 font-mono">
+                        {hasSupabaseConfig ? 'SUPABASE CONNECTED' : 'DEMO MODE ACTIVE'}
+                      </div>
+                    </div>
+                  </div>
+                  <div className={`px-3 py-1 rounded border font-mono text-sm ${
+                    hasSupabaseConfig 
+                      ? 'border-green-500/50 text-green-400 bg-green-500/10' 
+                      : 'border-yellow-500/50 text-yellow-400 bg-yellow-500/10'
+                  }`}>
+                    {demoMode ? 'DEMO' : 'LIVE'}
+                  </div>
+                </div>
+                {!hasSupabaseConfig && (
+                  <div className="mt-4 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+                    <div className="text-yellow-400 font-mono text-sm">
+                      📝 Configure Supabase in .env file to enable live backend features
+                    </div>
+                  </div>
+                )}
+              </div>
 
               {/* Threat Analytics Charts */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

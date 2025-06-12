@@ -31,6 +31,15 @@ const SupabaseSetup = () => {
         return;
       }
 
+      if (!supabase) {
+        setStatus({
+          connected: false,
+          error: 'Supabase client not initialized - check your configuration',
+          projectUrl: import.meta.env.VITE_SUPABASE_URL
+        });
+        return;
+      }
+
       // Test connection
       const { data, error } = await supabase.from('user_profiles').select('count').limit(1);
       
@@ -40,7 +49,7 @@ const SupabaseSetup = () => {
           error: error.message,
           projectUrl: import.meta.env.VITE_SUPABASE_URL
         });
-      } else {
+      } else if (supabase) {
         // Check for data
         const { data: threatsData } = await supabase.from('security_threats').select('count').limit(1);
         const { data: toolsData } = await supabase.from('security_tools').select('count').limit(1);
@@ -52,7 +61,8 @@ const SupabaseSetup = () => {
           hasData: (threatsData !== null && toolsData !== null)
         });
       }
-    } catch (error) {
+    } catch (err) {
+      console.error('Supabase connection error:', err);
       setStatus({
         connected: false,
         error: 'Failed to connect to Supabase'

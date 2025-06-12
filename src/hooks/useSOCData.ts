@@ -1,5 +1,69 @@
-import { useEffect, useState } from 'react'
-import { supabase, SecurityThreat, SecurityTool, TrainingModule, UserProgress, SystemMetrics } from '../lib/supabase'
+import { useEffect, useState, useCallback } from 'react'
+import { supabase, type SecurityThreat, type SecurityTool, type TrainingModule, type UserProgress, type SystemMetrics, isSupabaseConfigured } from '../lib/supabase'
+
+// Demo data for when Supabase is not available
+const demoThreats: SecurityThreat[] = [
+  {
+    id: '1',
+    type: 'Malware',
+    severity: 'High',
+    source_ip: '192.168.1.45',
+    target_ip: '10.0.0.100',
+    status: 'Blocked',
+    description: 'Suspicious executable detected',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    user_id: 'demo-user'
+  },
+  {
+    id: '2',
+    type: 'DDoS',
+    severity: 'Critical',
+    source_ip: '203.45.67.89',
+    status: 'Mitigated',
+    description: 'High volume traffic detected',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    user_id: 'demo-user'
+  }
+]
+
+const demoTools: SecurityTool[] = [
+  {
+    id: '1',
+    name: 'Suricata IDS',
+    status: 'active',
+    performance: 98,
+    icon: '🛡️',
+    metrics: { threats: 156 },
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  },
+  {
+    id: '2',
+    name: 'Elasticsearch',
+    status: 'active',
+    performance: 95,
+    icon: '🔍',
+    metrics: { events: 2847 },
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  }
+]
+
+const demoModules: TrainingModule[] = [
+  {
+    id: '1',
+    title: 'Advanced Threat Hunting',
+    description: 'Learn advanced techniques for proactive threat hunting using MITRE ATT&CK framework',
+    difficulty: 'Expert',
+    duration: '45 minutes',
+    type: 'Interactive Lab',
+    content: {},
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  }
+]
 
 // Hook for managing security threats
 export function useThreats() {
@@ -7,6 +71,13 @@ export function useThreats() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    if (!isSupabaseConfigured || !supabase) {
+      // Use demo data
+      setThreats(demoThreats)
+      setLoading(false)
+      return
+    }
+
     fetchThreats()
 
     // Set up real-time subscription
@@ -34,6 +105,11 @@ export function useThreats() {
   }, [])
 
   const fetchThreats = async () => {
+    if (!isSupabaseConfigured || !supabase) {
+      setLoading(false)
+      return
+    }
+
     try {
       const { data, error } = await supabase
         .from('security_threats')
@@ -45,48 +121,16 @@ export function useThreats() {
       setThreats(data)
     } catch (error) {
       console.error('Error fetching threats:', error)
+      setThreats(demoThreats)
     } finally {
       setLoading(false)
-    }
-  }
-
-  const addThreat = async (threat: Omit<SecurityThreat, 'id' | 'created_at' | 'updated_at' | 'user_id'>) => {
-    try {
-      const { data, error } = await supabase
-        .from('security_threats')
-        .insert(threat)
-        .select()
-        .single()
-
-      if (error) throw error
-      return { data, error: null }
-    } catch (error) {
-      return { data: null, error }
-    }
-  }
-
-  const updateThreatStatus = async (id: string, status: SecurityThreat['status']) => {
-    try {
-      const { data, error } = await supabase
-        .from('security_threats')
-        .update({ status, updated_at: new Date().toISOString() })
-        .eq('id', id)
-        .select()
-        .single()
-
-      if (error) throw error
-      return { data, error: null }
-    } catch (error) {
-      return { data: null, error }
     }
   }
 
   return {
     threats,
     loading,
-    addThreat,
-    updateThreatStatus,
-    refetch: fetchThreats,
+    refetch: fetchThreats
   }
 }
 
@@ -96,29 +140,22 @@ export function useSecurityTools() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetchTools()
-
-    // Set up real-time subscription
-    const subscription = supabase
-      .channel('tools')
-      .on('postgres_changes',
-        { event: '*', schema: 'public', table: 'security_tools' },
-        (payload) => {
-          if (payload.eventType === 'UPDATE') {
-            setTools(prev => prev.map(tool => 
-              tool.id === payload.new.id ? payload.new as SecurityTool : tool
-            ))
-          }
-        }
-      )
-      .subscribe()
-
-    return () => {
-      subscription.unsubscribe()
+    if (!isSupabaseConfigured || !supabase) {
+      // Use demo data
+      setTools(demoTools)
+      setLoading(false)
+      return
     }
+
+    fetchTools()
   }, [])
 
   const fetchTools = async () => {
+    if (!isSupabaseConfigured || !supabase) {
+      setLoading(false)
+      return
+    }
+
     try {
       const { data, error } = await supabase
         .from('security_tools')
@@ -128,69 +165,76 @@ export function useSecurityTools() {
       if (error) throw error
       setTools(data)
     } catch (error) {
-      console.error('Error fetching tools:', error)
+      console.error('Error fetching security tools:', error)
+      setTools(demoTools)
     } finally {
       setLoading(false)
-    }
-  }
-
-  const updateToolStatus = async (id: string, status: SecurityTool['status'], performance?: number) => {
-    try {
-      const updates: any = { status, updated_at: new Date().toISOString() }
-      if (performance !== undefined) updates.performance = performance
-
-      const { data, error } = await supabase
-        .from('security_tools')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single()
-
-      if (error) throw error
-      return { data, error: null }
-    } catch (error) {
-      return { data: null, error }
     }
   }
 
   return {
     tools,
     loading,
-    updateToolStatus,
-    refetch: fetchTools,
+    refetch: fetchTools
   }
 }
 
-// Hook for training modules and user progress
-export function useTraining(userId?: string) {
+// Hook for managing training modules
+export function useTrainingModules() {
   const [modules, setModules] = useState<TrainingModule[]>([])
-  const [userProgress, setUserProgress] = useState<UserProgress[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetchModules()
-    if (userId) {
-      fetchUserProgress(userId)
+    if (!isSupabaseConfigured || !supabase) {
+      // Use demo data
+      setModules(demoModules)
+      setLoading(false)
+      return
     }
-  }, [userId])
+
+    fetchModules()
+  }, [])
 
   const fetchModules = async () => {
+    if (!isSupabaseConfigured || !supabase) {
+      setLoading(false)
+      return
+    }
+
     try {
       const { data, error } = await supabase
         .from('training_modules')
         .select('*')
-        .order('difficulty', { ascending: true })
+        .order('title')
 
       if (error) throw error
       setModules(data)
     } catch (error) {
       console.error('Error fetching training modules:', error)
+      setModules(demoModules)
     } finally {
       setLoading(false)
     }
   }
 
-  const fetchUserProgress = async (userId: string) => {
+  return {
+    modules,
+    loading,
+    refetch: fetchModules
+  }
+}
+
+// Hook for managing user progress
+export function useUserProgress(userId?: string) {
+  const [progress, setProgress] = useState<UserProgress[]>([])
+  const [loading, setLoading] = useState(true)
+
+  const fetchProgress = useCallback(async () => {
+    if (!userId || !isSupabaseConfigured || !supabase) {
+      setLoading(false)
+      return
+    }
+
     try {
       const { data, error } = await supabase
         .from('user_progress')
@@ -198,83 +242,50 @@ export function useTraining(userId?: string) {
         .eq('user_id', userId)
 
       if (error) throw error
-      setUserProgress(data)
+      setProgress(data)
     } catch (error) {
       console.error('Error fetching user progress:', error)
+    } finally {
+      setLoading(false)
     }
-  }
+  }, [userId])
 
-  const updateProgress = async (moduleId: string, progress: number) => {
-    if (!userId) return { data: null, error: new Error('No user ID provided') }
-
-    try {
-      const { data, error } = await supabase
-        .from('user_progress')
-        .upsert({
-          user_id: userId,
-          module_id: moduleId,
-          progress,
-          completed: progress >= 100,
-          completed_at: progress >= 100 ? new Date().toISOString() : null,
-        })
-        .select()
-        .single()
-
-      if (error) throw error
-      
-      // Update local state
-      setUserProgress(prev => {
-        const existing = prev.find(p => p.module_id === moduleId)
-        if (existing) {
-          return prev.map(p => p.module_id === moduleId ? data : p)
-        } else {
-          return [...prev, data]
-        }
-      })
-
-      return { data, error: null }
-    } catch (error) {
-      return { data: null, error }
+  useEffect(() => {
+    if (!userId || !isSupabaseConfigured || !supabase) {
+      setLoading(false)
+      return
     }
-  }
+
+    fetchProgress()
+  }, [userId, fetchProgress])
 
   return {
-    modules,
-    userProgress,
+    progress,
     loading,
-    updateProgress,
-    refetch: () => {
-      fetchModules()
-      if (userId) fetchUserProgress(userId)
-    },
+    refetch: fetchProgress
   }
 }
 
 // Hook for system metrics
-export function useMetrics() {
+export function useSystemMetrics() {
   const [metrics, setMetrics] = useState<SystemMetrics[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetchMetrics()
-
-    // Set up real-time subscription
-    const subscription = supabase
-      .channel('metrics')
-      .on('postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'system_metrics' },
-        (payload) => {
-          setMetrics(prev => [payload.new as SystemMetrics, ...prev.slice(0, 99)]) // Keep only latest 100
-        }
-      )
-      .subscribe()
-
-    return () => {
-      subscription.unsubscribe()
+    if (!isSupabaseConfigured || !supabase) {
+      setLoading(false)
+      return
     }
+
+    fetchMetrics()
   }, [])
 
   const fetchMetrics = async () => {
+    if (!isSupabaseConfigured || !supabase) {
+      setLoading(false)
+      return
+    }
+
     try {
       const { data, error } = await supabase
         .from('system_metrics')
@@ -285,31 +296,15 @@ export function useMetrics() {
       if (error) throw error
       setMetrics(data)
     } catch (error) {
-      console.error('Error fetching metrics:', error)
+      console.error('Error fetching system metrics:', error)
     } finally {
       setLoading(false)
-    }
-  }
-
-  const addMetric = async (metric: Omit<SystemMetrics, 'id' | 'timestamp'>) => {
-    try {
-      const { data, error } = await supabase
-        .from('system_metrics')
-        .insert(metric)
-        .select()
-        .single()
-
-      if (error) throw error
-      return { data, error: null }
-    } catch (error) {
-      return { data: null, error }
     }
   }
 
   return {
     metrics,
     loading,
-    addMetric,
-    refetch: fetchMetrics,
+    refetch: fetchMetrics
   }
 }
