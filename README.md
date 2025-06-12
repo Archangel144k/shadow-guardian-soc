@@ -1,6 +1,23 @@
-# Shadow Guardian SOC Platform
+# 🛡️ Shadow Guardian SOC Platform
 
-An advanced cybersecurity Security Operations Center (SOC) dashboard built with React, TypeScript, and cutting-edge web technologies. Features a cyberpunk aesthetic with professional SOC functionality.
+<div align="center">
+
+[![GitHub Stars](https://img.shields.io/github/stars/Archangel144k/shadow-guardian-soc?style=for-the-badge&logo=github&color=red)](https://github.com/Archangel144k/shadow-guardian-soc/stargazers)
+[![GitHub Forks](https://img.shields.io/github/forks/Archangel144k/shadow-guardian-soc?style=for-the-badge&logo=github&color=orange)](https://github.com/Archangel144k/shadow-guardian-soc/network)
+[![GitHub Issues](https://img.shields.io/github/issues/Archangel144k/shadow-guardian-soc?style=for-the-badge&logo=github&color=yellow)](https://github.com/Archangel144k/shadow-guardian-soc/issues)
+[![License](https://img.shields.io/github/license/Archangel144k/shadow-guardian-soc?style=for-the-badge&color=green)](LICENSE)
+
+**An advanced cybersecurity Security Operations Center (SOC) dashboard with cyberpunk aesthetics**
+
+*Built with React + TypeScript + Professional SOC functionality*
+
+[🚀 Live Demo](https://archangel144k.github.io/shadow-guardian-soc) • [📖 Documentation](./DEMO_GUIDE.md) • [🐛 Report Bug](https://github.com/Archangel144k/shadow-guardian-soc/issues) • [✨ Request Feature](https://github.com/Archangel144k/shadow-guardian-soc/issues)
+
+</div>
+
+---
+
+An enterprise-grade cybersecurity dashboard that combines cutting-edge web technologies with professional SOC functionality. Features a stunning cyberpunk aesthetic, real-time threat monitoring, and comprehensive security tools management.
 
 ## 🛡️ Features
 
@@ -48,7 +65,26 @@ An advanced cybersecurity Security Operations Center (SOC) dashboard built with 
 
 ### Installation
 
-1. Clone the repository:
+1. **Clone the repository:**
+```bash
+git clone https://github.com/Archangel144k/shadow-guardian-soc.git
+cd shadow-guardian-soc
+```
+
+2. **Install dependencies:**
+```bash
+npm install
+```
+
+3. **Start the development server:**
+```bash
+npm run dev
+```
+
+4. **Open your browser and navigate to:**
+```
+http://localhost:5173
+```
 ```bash
 git clone <repository-url>
 cd cronos
@@ -137,6 +173,34 @@ This is a demonstration project showcasing modern React development with a cyber
 
 MIT License - See LICENSE file for details
 
+## 🤝 Contributing
+
+Contributions, issues, and feature requests are welcome! Feel free to check the [issues page](https://github.com/Archangel144k/shadow-guardian-soc/issues).
+
+1. Fork the Project
+2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the Branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+## ⭐ Show Your Support
+
+Give a ⭐️ if this project helped you learn about cybersecurity or web development!
+
+## 👤 Author
+
+**Archangel144k**
+- GitHub: [@Archangel144k](https://github.com/Archangel144k)
+- Project Link: [https://github.com/Archangel144k/shadow-guardian-soc](https://github.com/Archangel144k/shadow-guardian-soc)
+
 ---
 
+<div align="center">
+
+**🛡️ Built with ❤️ for the cybersecurity community**
+
+*"In shadows we trust, in code we defend"*
+
 **⚠️ Disclaimer**: This is a demonstration/educational project. Not intended for actual security operations without proper security reviews and implementations.
+
+</div>
