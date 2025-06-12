@@ -126,15 +126,26 @@ Shadow Guardian supports two modes of operation:
 
 Add `?demo=true` to the URL for automatic authentication after 3 seconds.
 
-## 🏗️ Project Structure
+## 🛠️ Development Tips
 
+### Quick Start with Demo Mode
+```bash
+# Fast demo without Supabase setup
+npm install && npm run dev
+# Visit http://localhost:5173?demo=true
 ```
-src/
-├── components/
-│   └── ShadowGuardian.tsx    # Main SOC dashboard component
-├── index.css                 # Global styles with Tailwind + custom CSS
-├── App.tsx                   # Root component
-└── main.tsx                  # Application entry point
+
+### Environment Setup
+```bash
+# Check if Supabase is configured
+npm run dev
+# Look for "Supabase Backend" status in the dashboard
+```
+
+### Building for Production
+```bash
+npm run build    # Build optimized version
+npm run preview  # Preview production build
 ```
 
 ## 🎨 Design Philosophy
