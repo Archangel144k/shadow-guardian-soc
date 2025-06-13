@@ -1,0 +1,353 @@
+# Shadow Guardian SOC - Suricata IPS Configuration
+# Advanced configuration for intrusion prevention with minimal false positives
+
+%YAML 1.1
+---
+
+# Global configurations
+vars:
+  # Network segments to protect
+  address-groups:
+    HOME_NET: "[192.168.0.0/16,10.0.0.0/8,172.16.0.0/12]"
+    EXTERNAL_NET: "!$HOME_NET"
+    HTTP_SERVERS: "$HOME_NET"
+    SMTP_SERVERS: "$HOME_NET"
+    SQL_SERVERS: "$HOME_NET"
+    DNS_SERVERS: "$HOME_NET"
+    TELNET_SERVERS: "$HOME_NET"
+    AIM_SERVERS: "$EXTERNAL_NET"
+    DC_SERVERS: "$HOME_NET"
+    DNP3_SERVER: "$HOME_NET"
+    DNP3_CLIENT: "$HOME_NET"
+    MODBUS_CLIENT: "$HOME_NET"
+    MODBUS_SERVER: "$HOME_NET"
+    ENIP_CLIENT: "$HOME_NET"
+    ENIP_SERVER: "$HOME_NET"
+
+  port-groups:
+    HTTP_PORTS: "80"
+    SHELLCODE_PORTS: "!80"
+    ORACLE_PORTS: "1521"
+    SSH_PORTS: "22"
+    DNP3_PORTS: "20000"
+    MODBUS_PORTS: "502"
+    FILE_DATA_PORTS: "[$HTTP_PORTS,110,143]"
+    FTP_PORTS: "21"
+    GENEVE_PORTS: "6081"
+    VXLAN_PORTS: "4789"
+    TEREDO_PORTS: "3544"
+
+# === IPS MODE ACTIVATION ===
+# Ensure Suricata runs in inline/IPS mode (workers mode recommended for performance)
+runmode: workers
+
+# === RULES PATHS ===
+default-rule-path: /var/lib/suricata/rules
+rule-files:
+  - suricata.rules
+  - emerging-threats.rules
+  - custom-shadow-guardian.rules  # Custom rules for tuning/whitelisting
+
+# === WHITELISTING LEGITIMATE TRAFFIC ===
+# Use pass rules in custom-shadow-guardian.rules to allow known good traffic (see example rules file)
+# Example: pass tcp $HOME_NET any -> any 443 (msg:"Allow Google Services"; content:"googleapis.com"; tls.sni; sid:2000006; rev:1;)
+
+# Classification and reference configuration
+classification-file: /etc/suricata/classification.config
+reference-config-file: /etc/suricata/reference.config
+
+# Statistics configuration
+stats:
+  enabled: yes
+  interval: 8
+
+# Outputs configuration for SOC integration
+outputs:
+  # Fast log for real-time monitoring
+  - fast:
+      enabled: yes
+      filename: fast.log
+      append: yes
+
+  # Eve JSON log for SIEM integration
+  - eve-log:
+      enabled: yes
+      filetype: regular
+      filename: eve.json
+      community-id: true
+      community-id-seed: 0
+      types:
+        - alert:
+            payload: yes
+            payload-printable: yes
+            packet: yes
+            metadata: yes
+            http-body: yes
+            http-body-printable: yes
+            tagged-packets: yes
+        - http:
+            extended: yes
+        - dns
+        - tls:
+            extended: yes
+        - files:
+            force-magic: no
+        - smtp
+        - ssh
+        - stats:
+            totals: yes
+            threads: no
+            deltas: no
+        - flow
+        - netflow
+
+  # Syslog output for centralized logging
+  - syslog:
+      enabled: yes
+      facility: local5
+      level: Info
+
+# Application layer parsers
+app-layer:
+  protocols:
+    http:
+      enabled: yes
+      memcap: 64mb
+      request-body-limit: 100kb
+      response-body-limit: 100kb
+      request-body-minimal-inspect-size: 32kb
+      request-body-inspect-window: 4kb
+      response-body-minimal-inspect-size: 40kb
+      response-body-inspect-window: 16kb
+      response-body-decompress-layer-limit: 2
+      http-body-inline: auto
+      swf-decompression:
+        enabled: yes
+        type: both
+        compress-depth: 100kb
+        decompress-depth: 100kb
+      double-decode-path: no
+      double-decode-query: no
+
+    tls:
+      enabled: yes
+      detection-ports:
+        dp: 443
+
+    ftp:
+      enabled: yes
+
+    smtp:
+      enabled: yes
+
+    imap:
+      enabled: detection-only
+
+    ssh:
+      enabled: yes
+
+    dns:
+      tcp:
+        enabled: yes
+        detection-ports:
+          dp: 53
+      udp:
+        enabled: yes
+        detection-ports:
+          dp: 53
+
+# Threading configuration
+threading:
+  set-cpu-affinity: no
+  cpu-affinity:
+    - management-cpu-set:
+        cpu: [ 0 ]
+    - receive-cpu-set:
+        cpu: [ 0 ]
+    - worker-cpu-set:
+        cpu: [ "1-4" ]
+
+# IPS/IDS mode configuration
+runmode: workers
+
+# Detection engine settings optimized for IPS
+detect:
+  profile: high
+  custom-values:
+    toclient-groups: 3
+    toserver-groups: 25
+  sgh-mpm-context: auto
+  inspection-recursion-limit: 3000
+  prefilter:
+    default: mpm
+  grouping:
+    tcp-whitelist: 53, 80, 139, 443, 993, 995, 1433, 3306, 5432, 6379, 9200, 27017
+
+# Flow configuration
+flow:
+  memcap: 128mb
+  hash-size: 65536
+  prealloc: 10000
+  emergency-recovery: 30
+
+# Stream configuration
+stream:
+  memcap: 64mb
+  checksum-validation: yes
+  inline: auto
+  reassembly:
+    memcap: 256mb
+    depth: 1mb
+    toserver-chunk-size: 2560
+    toclient-chunk-size: 2560
+    randomize-chunk-size: yes
+
+# Host configuration
+host:
+  hash-size: 4096
+  prealloc: 1000
+  memcap: 32mb
+
+# Defragmentation
+defrag:
+  memcap: 32mb
+  hash-size: 65536
+  trackers: 65536
+  max-frags: 65536
+  prealloc: yes
+  timeout: 60
+
+# Flow timeouts
+flow-timeouts:
+  default:
+    new: 30
+    established: 300
+    closed: 0
+    bypassed: 100
+    emergency-new: 10
+    emergency-established: 100
+    emergency-closed: 0
+    emergency-bypassed: 50
+  tcp:
+    new: 60
+    established: 600
+    closed: 60
+    bypassed: 100
+    emergency-new: 5
+    emergency-established: 300
+    emergency-closed: 20
+    emergency-bypassed: 50
+  udp:
+    new: 30
+    established: 300
+    bypassed: 100
+    emergency-new: 10
+    emergency-established: 100
+    emergency-bypassed: 50
+  icmp:
+    new: 30
+    established: 300
+    bypassed: 100
+    emergency-new: 10
+    emergency-established: 100
+    emergency-bypassed: 50
+
+# Logging level
+default-log-level: notice
+
+# Unix command socket for runtime control
+unix-command:
+  enabled: yes
+  filename: /var/run/suricata/suricata-command.socket
+
+# Legacy options
+legacy:
+  uricontent: enabled
+
+# Exception policy for malformed packets
+exception-policy: auto
+
+# NETMAP configuration for high-performance IPS
+# (DISABLED: Only af-packet with enp0s20f0u4 is used for inline IPS)
+# netmap:
+#   - interface: enp0s20f0u4
+#     copy-mode: ips
+#     copy-iface: enp0s20f0u4
+#     disable-promisc: no
+#     checksum-checks: kernel
+#     bpf-filter: not (host 192.168.1.1 and port 22)
+
+af-packet:
+  - interface: enp0s20f0u4  # Your actual network interface (IPS mode)
+    copy-mode: ips
+    copy-iface: enp0s20f0u4  # Using the same interface for inline IPS (single interface mode)
+    cluster-id: 99
+    cluster-type: cluster_flow
+    defrag: yes
+    use-mmap: yes
+    mmap-locked: yes
+    tpacket-v3: yes
+    ring-size: 2048
+    block-size: 32768
+    block-timeout: 10
+    use-emergency-flush: yes
+
+# PCAP configuration for offline analysis (DISABLED for IPS mode)
+# pcap:
+#   - interface: enp0s20f0u4
+#     buffer-size: 64498
+#     bpf-filter: not (host 192.168.1.1 and port 22)
+#     checksum-checks: kernel
+
+# Engine analysis and profiling
+engine-analysis:
+  rules-fast-pattern: yes
+  rules: yes
+
+# Profiling
+profiling:
+  rules:
+    enabled: yes
+    filename: rule_perf.log
+    append: yes
+    sort: avgticks
+    limit: 100
+    json: yes
+
+# Coredump configuration
+coredump:
+  max-dump: unlimited
+
+# Host OS policy
+host-os-policy:
+  windows: [0.0.0.0/0]
+  bsd: []
+  bsd-right: []
+  old-linux: []
+  linux: []
+  old-solaris: []
+  solaris: []
+  hpux10: []
+  hpux11: []
+  irix: []
+  macos: []
+  vista: []
+  windows2k3: []
+
+# Security hardening
+security:
+  limit-noproc: true
+
+# === TUNING TIPS ===
+# 1. Use pass rules for business-critical and update traffic (see custom-shadow-guardian.rules)
+# 2. Use drop only for high-confidence threats (malware, confirmed exploits)
+# 3. Use alert for suspicious/low-confidence events
+# 4. Regularly review alerts and tune rules to reduce false positives
+# 5. Update HOME_NET/EXTERNAL_NET to match your environment
+
+# === INTERFACE CONFIGURATION ===
+# Replace <YOUR_INGRESS_INTERFACE> and <YOUR_EGRESS_INTERFACE> above with your actual network interface names.
+# To list interfaces, run: ip link show
+# Example:
+#   - interface: eth0
+#     copy-iface: eth1

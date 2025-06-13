@@ -1,25 +1,34 @@
 import { useState, useEffect } from 'react';
-import { 
-  Shield, 
-  AlertTriangle, 
-  Book, 
-  Activity, 
-  Lock, 
-  Eye, 
-  Skull, 
-  Key, 
-  Smartphone, 
-  QrCode, 
-  ShieldCheck, 
-  Settings, 
-  Search, 
-  LogOut, 
-  LogIn, 
-  User, 
-  Database, 
-  Ghost, 
-  Target 
+import {
+  Shield,
+  AlertTriangle,
+  Book,
+  Activity,
+  Lock,
+  Eye,
+  Skull,
+  Key,
+  Smartphone,
+  QrCode,
+  ShieldCheck,
+  Settings,
+  Search,
+  LogOut,
+  LogIn,
+  User,
+  Database,
+  Ghost,
+  Target,
+  Award,
+  Route,
+  Brain
 } from 'lucide-react';
+import { useLearning, useAchievements, useTrainingModules } from '../hooks/useSOCData';
+import { useTrainingProgress } from '../hooks/useTrainingProgress';
+import type { TrainingModule } from '../lib/supabase';
+import ModuleViewer from './learning/ModuleViewer';
+import AchievementSystem from './learning/AchievementSystem';
+import LearningPaths from './learning/LearningPaths';
 import { 
   PieChart, 
   Pie, 
@@ -55,6 +64,7 @@ const ShadowGuardian = () => {
   const [authAttempts, setAuthAttempts] = useState(0);
   const [lockoutTime, setLockoutTime] = useState(0);
   const [currentUser, setCurrentUser] = useState<{
+    id: string;
     username: string;
     role: string;
     department: string;
@@ -85,6 +95,57 @@ const ShadowGuardian = () => {
   const [alertCount, setAlertCount] = useState(0);
   const [soundEnabled, setSoundEnabled] = useState(false);
   const scanlineEffect = true;
+
+  // Learning System State
+  const [learningView, setLearningView] = useState<'overview' | 'paths' | 'achievements'>('overview');
+  const [selectedModule, setSelectedModule] = useState<TrainingModule | null>(null);
+
+  // Hooks for learning functionality
+  const { modules: trainingModules, loading: modulesLoading } = useTrainingModules();
+  const trainingProgress = useTrainingProgress(currentUser?.id);
+  const {
+    currentLesson,
+    completedModules,
+    achievements,
+    quizScores,
+    loading: learningLoading,
+    startModule: startLearningModule,
+    completeLesson,
+    submitQuiz: submitLearningQuiz,
+    getOverallProgress,
+    getSkillLevel,
+    setCurrentLesson
+  } = useLearning(currentUser?.id);
+  const { achievementDefinitions } = useAchievements();
+
+  // Enhanced training functions that use both local state and database
+  const startModule = async (module: TrainingModule) => {
+    console.log('Starting module:', module.title, 'Content:', module.content)
+    await trainingProgress.startModule(module.id)
+    await startLearningModule(module)
+  }
+
+  const submitQuiz = (moduleId: string, answers: number[], questions: unknown[]) => {
+    const score = submitLearningQuiz(moduleId, answers, questions)
+    // Update in background without blocking the UI
+    trainingProgress.submitQuiz(moduleId, answers, questions as any[], score).catch(console.error)
+    return score
+  }
+
+  const completeModuleLesson = async (moduleId: string, lessonIndex: number) => {
+    await completeLesson(moduleId, lessonIndex)
+    
+    // Calculate progress and update database
+    const module = trainingModules.find(m => m.id === moduleId)
+    if (module && module.content?.lessons) {
+      const progressPercentage = Math.round(((lessonIndex + 1) / module.content.lessons.length) * 100)
+      await trainingProgress.updateModuleProgress(moduleId, progressPercentage)
+      
+      if (progressPercentage === 100) {
+        await trainingProgress.completeModule(moduleId)
+      }
+    }
+  }
 
   // User Database
   const users = {
@@ -169,46 +230,6 @@ const ShadowGuardian = () => {
     { id: 3, type: 'Phishing', severity: 'Medium', source: 'email.suspicious.com', status: 'Quarantined', time: '10:19:15' },
     { id: 4, type: 'SQL Injection', severity: 'High', source: '185.23.45.67', status: 'Blocked', time: '10:17:28' }
   ]);
-
-  // Training Modules
-  const trainingModules = [
-    { 
-      id: 1, 
-      title: 'Advanced Threat Hunting', 
-      difficulty: 'Expert', 
-      duration: '45 min', 
-      progress: 75,
-      type: 'Interactive Lab',
-      description: 'Learn advanced techniques for proactive threat hunting using MITRE ATT&CK framework'
-    },
-    { 
-      id: 2, 
-      title: 'Incident Response Procedures', 
-      difficulty: 'Intermediate', 
-      duration: '30 min', 
-      progress: 90,
-      type: 'Simulation',
-      description: 'Practice incident response workflows and containment strategies'
-    },
-    { 
-      id: 3, 
-      title: 'Digital Forensics Fundamentals', 
-      difficulty: 'Beginner', 
-      duration: '60 min', 
-      progress: 60,
-      type: 'Tutorial',
-      description: 'Master the basics of digital forensics and evidence collection'
-    },
-    { 
-      id: 4, 
-      title: 'Red Team Operations', 
-      difficulty: 'Expert', 
-      duration: '90 min', 
-      progress: 25,
-      type: 'Hands-on Lab',
-      description: 'Offensive security techniques and penetration testing methodologies'
-    }
-  ];
 
   // Matrix Rain Effect
   useEffect(() => {
@@ -338,7 +359,11 @@ const ShadowGuardian = () => {
     // Demo mode authentication
     const user = users[loginData.username.toLowerCase() as keyof typeof users];
     if (user && user.password === loginData.password) {
-      setCurrentUser({ username: loginData.username, ...user });
+      setCurrentUser({ 
+        id: loginData.username.toLowerCase(), // Use username as ID for demo
+        username: loginData.username, 
+        ...user 
+      });
       setAuthStep('mfa');
       setAuthAttempts(0);
     } else {
@@ -1074,91 +1099,226 @@ const ShadowGuardian = () => {
 
           {activeTab === 'learning' && (
             <div className="space-y-6">
+              {/* Header with Navigation */}
               <div className="flex items-center justify-between">
                 <h2 className="text-3xl font-bold text-green-400 font-mono">CYBERSECURITY TRAINING ACADEMY</h2>
-                <div className="flex items-center space-x-2">
-                  <Book className="w-5 h-5 text-green-400" />
-                  <span className="text-sm text-green-400 font-mono">SKILL DEVELOPMENT</span>
+                <div className="flex items-center space-x-4">
+                  <div className="flex items-center space-x-2">
+                    <Book className="w-5 h-5 text-green-400" />
+                    <span className="text-sm text-green-400 font-mono">SKILL DEVELOPMENT</span>
+                  </div>
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={() => setLearningView('overview')}
+                      className={`px-3 py-1 rounded font-mono text-sm transition-all ${
+                        learningView === 'overview'
+                          ? 'bg-green-500/20 text-green-400 border border-green-500/50'
+                          : 'bg-gray-500/20 text-gray-400 border border-gray-500/50 hover:bg-gray-500/30'
+                      }`}
+                    >
+                      OVERVIEW
+                    </button>
+                    <button
+                      onClick={() => setLearningView('paths')}
+                      className={`px-3 py-1 rounded font-mono text-sm transition-all ${
+                        learningView === 'paths'
+                          ? 'bg-blue-500/20 text-blue-400 border border-blue-500/50'
+                          : 'bg-gray-500/20 text-gray-400 border border-gray-500/50 hover:bg-gray-500/30'
+                      }`}
+                    >
+                      <Route className="w-4 h-4 inline mr-1" />
+                      PATHS
+                    </button>
+                    <button
+                      onClick={() => setLearningView('achievements')}
+                      className={`px-3 py-1 rounded font-mono text-sm transition-all ${
+                        learningView === 'achievements'
+                          ? 'bg-purple-500/20 text-purple-400 border border-purple-500/50'
+                          : 'bg-gray-500/20 text-gray-400 border border-gray-500/50 hover:bg-gray-500/30'
+                      }`}
+                    >
+                      <Award className="w-4 h-4 inline mr-1" />
+                      ACHIEVEMENTS
+                    </button>
+                  </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {trainingModules.map((module) => (
-                  <div key={module.id} className="bg-black/60 backdrop-blur-sm rounded-xl p-6 border border-green-500/30 shadow-lg shadow-green-500/10 hover:border-green-400/50 transition-all">
-                    <div className="flex items-start justify-between mb-4">
-                      <div>
-                        <h3 className="text-lg font-bold text-white font-mono mb-2">{module.title}</h3>
-                        <div className="flex items-center space-x-4 text-sm font-mono">
-                          <span className={`px-2 py-1 rounded ${
-                            module.difficulty === 'Expert' ? 'bg-red-500/20 text-red-400' :
-                            module.difficulty === 'Intermediate' ? 'bg-orange-500/20 text-orange-400' :
-                            'bg-green-500/20 text-green-400'
-                          }`}>
-                            {module.difficulty}
-                          </span>
-                          <span className="text-gray-400">{module.duration}</span>
-                          <span className="text-blue-400">{module.type}</span>
+              {/* Progress Overview */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="bg-black/60 backdrop-blur-sm rounded-xl p-4 border border-green-500/30 shadow-lg shadow-green-500/10">
+                  <div className="flex items-center space-x-3">
+                    <Brain className="w-6 h-6 text-green-400" />
+                    <div>
+                      <div className="text-lg font-bold text-green-400 font-mono">{getSkillLevel()}</div>
+                      <div className="text-xs text-gray-300 font-mono">SKILL LEVEL</div>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-black/60 backdrop-blur-sm rounded-xl p-4 border border-blue-500/30 shadow-lg shadow-blue-500/10">
+                  <div className="flex items-center space-x-3">
+                    <Book className="w-6 h-6 text-blue-400" />
+                    <div>
+                      <div className="text-lg font-bold text-blue-400 font-mono">{completedModules.size}/{trainingModules.length}</div>
+                      <div className="text-xs text-gray-300 font-mono">MODULES COMPLETED</div>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-black/60 backdrop-blur-sm rounded-xl p-4 border border-purple-500/30 shadow-lg shadow-purple-500/10">
+                  <div className="flex items-center space-x-3">
+                    <Award className="w-6 h-6 text-purple-400" />
+                    <div>
+                      <div className="text-lg font-bold text-purple-400 font-mono">{achievements.length}</div>
+                      <div className="text-xs text-gray-300 font-mono">ACHIEVEMENTS</div>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-black/60 backdrop-blur-sm rounded-xl p-4 border border-yellow-500/30 shadow-lg shadow-yellow-500/10">
+                  <div className="flex items-center space-x-3">
+                    <Target className="w-6 h-6 text-yellow-400" />
+                    <div>
+                      <div className="text-lg font-bold text-yellow-400 font-mono">{getOverallProgress()}%</div>
+                      <div className="text-xs text-gray-300 font-mono">OVERALL PROGRESS</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Content based on selected view */}
+              {(modulesLoading || learningLoading) ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="text-center">
+                    <div className="animate-spin w-8 h-8 border-2 border-green-400 border-t-transparent rounded-full mx-auto mb-4"></div>
+                    <div className="text-green-400 font-mono">LOADING TRAINING DATA...</div>
+                    <div className="text-xs text-gray-400 font-mono mt-2">
+                      {modulesLoading && "Loading modules..."} {learningLoading && "Loading progress..."}
+                    </div>
+                  </div>
+                </div>
+              ) : trainingModules.length === 0 ? (
+                <div className="text-center py-12">
+                  <div className="text-gray-400 font-mono">NO TRAINING MODULES AVAILABLE</div>
+                  <button 
+                    onClick={() => window.location.reload()} 
+                    className="mt-4 px-4 py-2 bg-green-500/20 text-green-400 rounded border border-green-500/50 hover:bg-green-500/30 transition-all text-sm font-mono"
+                  >
+                    RELOAD
+                  </button>
+                </div>
+              ) : learningView === 'overview' && (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {trainingModules.map((module) => {
+                      const progress = trainingProgress.getModuleProgress(module.id)
+                      const isCompleted = trainingProgress.isModuleCompleted(module.id)
+                      const quizScore = trainingProgress.getQuizScore(module.id)
+
+                      return (
+                        <div key={module.id} className="bg-black/60 backdrop-blur-sm rounded-xl p-6 border border-green-500/30 shadow-lg shadow-green-500/10 hover:border-green-400/50 transition-all">
+                          <div className="flex items-start justify-between mb-4">
+                            <div>
+                              <h3 className="text-lg font-bold text-white font-mono mb-2">{module.title}</h3>
+                              <div className="flex items-center space-x-4 text-sm font-mono">
+                                <span className={`px-2 py-1 rounded ${
+                                  module.difficulty === 'Expert' ? 'bg-red-500/20 text-red-400' :
+                                  module.difficulty === 'Advanced' ? 'bg-red-500/20 text-red-400' :
+                                  module.difficulty === 'Intermediate' ? 'bg-orange-500/20 text-orange-400' :
+                                  'bg-green-500/20 text-green-400'
+                                }`}>
+                                  {module.difficulty}
+                                </span>
+                                <span className="text-gray-400">{module.duration}</span>
+                                <span className="text-blue-400">{module.type}</span>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-lg font-bold text-green-400 font-mono">{progress}%</div>
+                              <div className="text-xs text-gray-400 font-mono">PROGRESS</div>
+                              {isCompleted && <div className="text-xs text-green-400 font-mono">✓ COMPLETED</div>}
+                              {quizScore && <div className="text-xs text-purple-400 font-mono">QUIZ: {quizScore}%</div>}
+                            </div>
+                          </div>
+
+                          <p className="text-gray-300 text-sm mb-4 font-mono">{module.description}</p>
+
+                          <div className="mb-4">
+                            <div className="flex justify-between text-xs text-gray-400 font-mono mb-1">
+                              <span>Progress</span>
+                              <span>{progress}%</span>
+                            </div>
+                            <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-green-400 transition-all duration-1000"
+                                style={{ width: `${progress}%` }}
+                              ></div>
+                            </div>
+                          </div>
+
+                          <div className="flex space-x-2">
+                            <button
+                              onClick={async () => {
+                                await startModule(module)
+                                setSelectedModule(module)
+                              }}
+                              className="flex-1 py-2 px-3 bg-green-500/20 text-green-400 rounded border border-green-500/50 hover:bg-green-500/30 transition-all text-xs font-mono"
+                            >
+                              {progress > 0 ? 'CONTINUE' : 'START MODULE'}
+                            </button>
+                            <button className="px-3 py-2 bg-gray-500/20 text-gray-400 rounded border border-gray-500/50 hover:bg-gray-500/30 transition-all text-xs font-mono">
+                              INFO
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-lg font-bold text-green-400 font-mono">{module.progress}%</div>
-                        <div className="text-xs text-gray-400 font-mono">PROGRESS</div>
-                      </div>
-                    </div>
-                    
-                    <p className="text-gray-300 text-sm mb-4 font-mono">{module.description}</p>
-                    
-                    <div className="mb-4">
-                      <div className="flex justify-between text-xs text-gray-400 font-mono mb-1">
-                        <span>Progress</span>
-                        <span>{module.progress}%</span>
-                      </div>
-                      <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-green-400 transition-all duration-1000"
-                          style={{ width: `${module.progress}%` }}
-                        ></div>
-                      </div>
-                    </div>
-                    
-                    <div className="flex space-x-2">
-                      <button className="flex-1 py-2 px-3 bg-green-500/20 text-green-400 rounded border border-green-500/50 hover:bg-green-500/30 transition-all text-xs font-mono">
-                        {module.progress > 0 ? 'CONTINUE' : 'START MODULE'}
-                      </button>
-                      <button className="px-3 py-2 bg-gray-500/20 text-gray-400 rounded border border-gray-500/50 hover:bg-gray-500/30 transition-all text-xs font-mono">
-                        INFO
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="bg-black/60 backdrop-blur-sm rounded-xl p-6 border border-purple-500/30 shadow-lg shadow-purple-500/10">
-                <h3 className="text-lg font-bold text-purple-400 font-mono mb-4">ACHIEVEMENT SYSTEM</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="p-4 bg-black/40 rounded-lg border border-gray-700/50">
-                    <div className="text-center">
-                      <div className="text-2xl mb-2">🏆</div>
-                      <div className="text-sm font-mono text-yellow-400">THREAT HUNTER</div>
-                      <div className="text-xs text-gray-400 font-mono">Complete 5 hunting modules</div>
-                    </div>
-                  </div>
-                  <div className="p-4 bg-black/40 rounded-lg border border-gray-700/50">
-                    <div className="text-center">
-                      <div className="text-2xl mb-2">🛡️</div>
-                      <div className="text-sm font-mono text-blue-400">DEFENDER</div>
-                      <div className="text-xs text-gray-400 font-mono">Master incident response</div>
-                    </div>
-                  </div>
-                  <div className="p-4 bg-black/40 rounded-lg border border-gray-700/50">
-                    <div className="text-center">
-                      <div className="text-2xl mb-2">💀</div>
-                      <div className="text-sm font-mono text-red-400">RED TEAM</div>
-                      <div className="text-xs text-gray-400 font-mono">Complete offensive modules</div>
-                    </div>
+                      )
+                    })}
                   </div>
                 </div>
-              </div>
+              )}
+
+              {learningView === 'paths' && (
+                <LearningPaths
+                  modules={trainingModules}
+                  moduleProgress={{
+                    ...Object.fromEntries(
+                      trainingModules.map(m => [m.id, trainingProgress.getModuleProgress(m.id)])
+                    )
+                  }}
+                  completedModules={new Set(
+                    trainingModules.filter(m => trainingProgress.isModuleCompleted(m.id)).map(m => m.id)
+                  )}
+                  onStartPath={(pathId) => {
+                    console.log('Starting learning path:', pathId)
+                    // Could implement path-specific logic here
+                  }}
+                  onSelectModule={async (module) => {
+                    await startModule(module)
+                    setSelectedModule(module)
+                  }}
+                />
+              )}
+
+              {learningView === 'achievements' && (
+                <AchievementSystem
+                  achievements={achievements}
+                  achievementDefinitions={achievementDefinitions}
+                  overallProgress={getOverallProgress()}
+                  completedModules={completedModules}
+                  quizScores={quizScores}
+                />
+              )}
+
+              {/* Module Viewer Modal */}
+              {selectedModule && (
+                <ModuleViewer
+                  module={selectedModule}
+                  progress={trainingProgress.getModuleProgress(selectedModule.id)}
+                  onComplete={completeModuleLesson}
+                  onQuizSubmit={submitQuiz}
+                  currentLesson={currentLesson}
+                  onLessonChange={setCurrentLesson}
+                  onClose={() => setSelectedModule(null)}
+                />
+              )}
             </div>
           )}
 

@@ -70,7 +70,23 @@ export interface TrainingModule {
   difficulty: 'Beginner' | 'Intermediate' | 'Advanced' | 'Expert'
   duration: string
   type: string
-  content?: Record<string, unknown>
+  content?: {
+    lessons?: Array<{
+      id: string
+      title: string
+      content: string
+      type: 'text' | 'interactive' | 'lab' | 'simulation' | 'exercise'
+      duration: number
+    }>
+    quiz?: {
+      questions: Array<{
+        id: string
+        question: string
+        options: string[]
+        correct: number
+      }>
+    }
+  }
   created_at: string
   updated_at: string
 }
@@ -79,10 +95,18 @@ export interface UserProgress {
   id: string
   user_id: string
   module_id: string
-  progress: number
-  completed: boolean
-  started_at: string
+  status: 'not_started' | 'in_progress' | 'completed' | 'failed'
+  progress_percentage: number
+  score?: number
+  time_spent: number
+  attempts: number
+  last_activity?: string
+  completion_data?: Record<string, unknown>
+  notes?: string
+  started_at?: string
   completed_at?: string
+  created_at: string
+  updated_at: string
 }
 
 export interface SystemMetrics {
